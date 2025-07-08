@@ -72,7 +72,7 @@ class CSVDeDuplicatorApp:
 
     def deduplicate_and_save(self):
         if self.df is None:
-            messagebox.showwarning("No File", "Please load a CSV file first.")
+            messagebox.showwarning("No File", "Please load a CSV file first!")
             return
         selected_columns = self.get_selected_columns()
         if not selected_columns:
