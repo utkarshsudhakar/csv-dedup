@@ -6,7 +6,7 @@ import os
 class CSVDeDuplicatorApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("CSV De-Duplicator")
+        self.root.title("Akarshans Edge CSV De-Duplicator")
         self.root.geometry("500x400")
         self.root.resizable(False, False)
 
@@ -79,21 +79,40 @@ class CSVDeDuplicatorApp:
             messagebox.showwarning("No Columns", "Please select one or more columns.")
             return
 
-        output_filename = simpledialog.askstring("Save As", "Enter name for output CSV (no extension):")
+        output_filename = simpledialog.askstring("Save As", "Enter name for CLEANED output CSV (no extension):")
         if not output_filename:
             return
 
+        # Ask if there's a mobile number column
+        mobile_col = simpledialog.askstring("Mobile Column", "Enter the exact column name that holds Mobile Numbers (optional):")
+
         try:
             df_cleaned = self.df.drop_duplicates(subset=selected_columns)
-            output_path = os.path.join(
-                os.path.dirname(self.selected_file),
-                f"{output_filename}.csv"
-            )
+
+            bad_data = pd.DataFrame()
+            if mobile_col and mobile_col in df_cleaned.columns:
+                # Find bad mobile numbers: >14 chars or contains characters other than + and digits
+                is_bad = df_cleaned[mobile_col].astype(str).str.len() > 14
+                is_bad |= ~df_cleaned[mobile_col].astype(str).str.match(r'^[\d+]+$')
+                bad_data = df_cleaned[is_bad].copy()
+                df_cleaned = df_cleaned[~is_bad]
+
+            output_path = os.path.join(os.path.dirname(self.selected_file), f"{output_filename}.csv")
             df_cleaned.to_csv(output_path, index=False)
-            removed = len(self.df) - len(df_cleaned)
-            messagebox.showinfo("Success", f"✅ Saved to: {output_path}\n🧹 {removed} duplicates removed.")
+
+            messages = [f"✅ Saved CLEANED file: {output_path}", f"🧹 {len(self.df) - len(df_cleaned)} duplicates removed."]
+            
+            if not bad_data.empty:
+                bad_output_filename = simpledialog.askstring("Save As", "Enter name for BAD DATA output CSV (no extension):")
+                if bad_output_filename:
+                    bad_path = os.path.join(os.path.dirname(self.selected_file), f"{bad_output_filename}.csv")
+                    bad_data.to_csv(bad_path, index=False)
+                    messages.append(f"⚠️ Saved BAD DATA file: {bad_path} ({len(bad_data)} rows)")
+
+            messagebox.showinfo("Done", "\n".join(messages))
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save file:\n{e}")
+
 
 if __name__ == "__main__":
     root = tk.Tk()
