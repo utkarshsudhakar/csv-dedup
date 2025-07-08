@@ -1,12 +1,16 @@
-name: Build Windows EXE
+name: Build Windows EXE and macOS APP
 
 on:
   push:
     paths:
       - '**.py'
+      - '**.icns'
+      - '**.ico'
+      - '.github/workflows/build.yml'
 
 jobs:
-  build:
+  build-windows:
+    name: Build EXE for Windows
     runs-on: windows-latest
 
     steps:
@@ -24,7 +28,7 @@ jobs:
 
       - name: Build EXE with PyInstaller
         run: |
-          pyinstaller --onefile --windowed csv_dedup_gui.py
+          pyinstaller --onefile --windowed --icon=icon.ico csv_dedup_gui.py
 
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v4
@@ -32,3 +36,29 @@ jobs:
           name: dedup_tool_windows_exe
           path: dist/csv_dedup_gui.exe
 
+  build-macos:
+    name: Build .app for macOS
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas pyinstaller
+
+      - name: Build macOS .app with PyInstaller
+        run: |
+          pyinstaller --windowed --name "CSV DeDuper" --icon=icon.ico csv_dedup_gui.py
+
+      - name: Upload macOS .app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dedup_tool_macos_app
+          path: dist/CSV\ DeDuper.app
