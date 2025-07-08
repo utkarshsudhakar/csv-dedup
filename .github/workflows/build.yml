@@ -55,7 +55,7 @@ jobs:
 
       - name: Build macOS .app with PyInstaller
         run: |
-          pyinstaller --windowed --name "CSV DeDuper" --icon=icon.ico csv_dedup_gui.py
+          pyinstaller --windowed --name "CSV DeDuper" --icon=icon.icns csv_dedup_gui.py
 
       - name: Upload macOS .app artifact
         uses: actions/upload-artifact@v4
