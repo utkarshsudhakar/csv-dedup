@@ -27,7 +27,7 @@ jobs:
           pyinstaller --onefile --windowed csv_dedup_gui.py
 
       - name: Upload EXE artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: dedup_tool_windows_exe
           path: dist/csv_dedup_gui.exe
