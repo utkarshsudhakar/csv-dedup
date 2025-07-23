@@ -1,13 +1,13 @@
 import pandas as pd
 import tkinter as tk
-from tkinter import filedialog, messagebox, MULTIPLE, Listbox, Scrollbar, simpledialog
+from tkinter import filedialog, messagebox, MULTIPLE, Listbox, Scrollbar
 import os
 
 class CSVDeDuplicatorApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Akarshans Edge CSV De-Duplicator and Cleaner")
-        self.root.geometry("500x480")
+        self.root.geometry("500x550")
         self.root.resizable(False, False)
 
         self.selected_file = None
@@ -42,7 +42,16 @@ class CSVDeDuplicatorApp:
         self.mobile_dropdown = tk.OptionMenu(self.root, self.mobile_column_var, "")
         self.mobile_dropdown.pack()
 
-        # Two separate buttons now
+        tk.Label(self.root, text="Step 4: Output Filenames").pack(pady=(15, 5))
+        self.clean_filename_entry = tk.Entry(self.root, width=40)
+        self.clean_filename_entry.pack(pady=2)
+        self.clean_filename_entry.insert(0, "cleaned_data")  # default name
+
+        self.bad_filename_entry = tk.Entry(self.root, width=40)
+        self.bad_filename_entry.pack(pady=2)
+        self.bad_filename_entry.insert(0, "bad_data")  # default name
+
+        # Action Buttons
         tk.Button(self.root, text="Preview Duplicates", command=self.preview_duplicates).pack(pady=10)
         tk.Button(self.root, text="CSV De-Dup", command=self.deduplicate_and_save, bg="#4CAF50", fg="white").pack(pady=5)
         tk.Button(self.root, text="Filter Bad Data", command=self.filter_bad_data, bg="#f44336", fg="white").pack(pady=5)
@@ -59,7 +68,6 @@ class CSVDeDuplicatorApp:
             for col in columns:
                 self.column_listbox.insert(tk.END, col)
 
-            # Update dropdown
             menu = self.mobile_dropdown["menu"]
             menu.delete(0, "end")
             for col in columns:
@@ -73,6 +81,14 @@ class CSVDeDuplicatorApp:
     def get_selected_columns(self):
         selected_indices = self.column_listbox.curselection()
         return [self.column_listbox.get(i) for i in selected_indices]
+
+    def get_output_paths(self):
+        base_dir = os.path.dirname(self.selected_file)
+        clean_name = self.clean_filename_entry.get().strip()
+        bad_name = self.bad_filename_entry.get().strip()
+        clean_path = os.path.join(base_dir, f"{clean_name}.csv") if clean_name else None
+        bad_path = os.path.join(base_dir, f"{bad_name}.csv") if bad_name else None
+        return clean_path, bad_path
 
     def preview_duplicates(self):
         if self.df is None:
@@ -96,8 +112,9 @@ class CSVDeDuplicatorApp:
             messagebox.showwarning("No Columns", "Please select one or more columns.")
             return
 
-        output_filename = simpledialog.askstring("Save As", "Enter name for DEDUP output CSV (no extension):")
-        if not output_filename:
+        clean_path, _ = self.get_output_paths()
+        if not clean_path:
+            messagebox.showwarning("Missing Filename", "Please provide a filename for the cleaned data.")
             return
 
         try:
@@ -106,11 +123,9 @@ class CSVDeDuplicatorApp:
                 messagebox.showwarning("Empty Output", "All rows were removed. No valid data to save.")
                 return
 
-            output_path = os.path.join(os.path.dirname(self.selected_file), f"{output_filename}.csv")
-            df_deduped.to_csv(output_path, index=False)
-
+            df_deduped.to_csv(clean_path, index=False)
             self.df = df_deduped.copy()
-            messagebox.showinfo("Done", f"✅ Saved DEDUPLICATED file: {output_path}\n🧹 {len(self.df) - len(df_deduped)} duplicates removed.")
+            messagebox.showinfo("Done", f"✅ Saved DEDUPLICATED file: {clean_path}")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save file:\n{e}")
 
@@ -127,14 +142,14 @@ class CSVDeDuplicatorApp:
             messagebox.showerror("Error", f"Selected mobile column '{mobile_col}' not found in data.")
             return
 
-        output_filename = simpledialog.askstring("Save As", "Enter name for FILTERED output CSV (no extension):")
-        if not output_filename:
+        clean_path, bad_path = self.get_output_paths()
+        if not clean_path or not bad_path:
+            messagebox.showwarning("Missing Filenames", "Please provide filenames for both cleaned and bad data.")
             return
 
         try:
-            # Filter bad data based on your original logic
             is_bad = self.df[mobile_col].astype(str).str.len() > 14
-            is_bad = is_bad | ~self.df[mobile_col].astype(str).str.match(r'^\+?\d+$')
+            is_bad |= ~self.df[mobile_col].astype(str).str.match(r'^\+?\d+$')
             bad_data = self.df[is_bad].copy()
             filtered_data = self.df[~is_bad]
 
@@ -142,17 +157,12 @@ class CSVDeDuplicatorApp:
                 messagebox.showwarning("Empty Output", "All rows were filtered out. No valid data to save.")
                 return
 
-            output_path = os.path.join(os.path.dirname(self.selected_file), f"{output_filename}.csv")
-            filtered_data.to_csv(output_path, index=False)
-
-            messages = [f"✅ Saved FILTERED file: {output_path}", f"🚫 {len(bad_data)} bad rows filtered out."]
+            filtered_data.to_csv(clean_path, index=False)
+            messages = [f"✅ Saved FILTERED file: {clean_path}", f"🚫 {len(bad_data)} bad rows filtered."]
 
             if not bad_data.empty:
-                bad_output_filename = simpledialog.askstring("Save As", "Enter name for BAD DATA output CSV (no extension):")
-                if bad_output_filename:
-                    bad_path = os.path.join(os.path.dirname(self.selected_file), f"{bad_output_filename}.csv")
-                    bad_data.to_csv(bad_path, index=False)
-                    messages.append(f"⚠️ Saved BAD DATA file: {bad_path} ({len(bad_data)} rows)")
+                bad_data.to_csv(bad_path, index=False)
+                messages.append(f"⚠️ Saved BAD DATA file: {bad_path} ({len(bad_data)} rows)")
 
             self.df = filtered_data.copy()
             messagebox.showinfo("Done", "\n".join(messages))
