@@ -28,7 +28,7 @@ jobs:
 
       - name: Build EXE with PyInstaller
         run: |
-          pyinstaller --onefile --windowed --icon=icon.ico csv_dedup_gui.py
+          pyinstaller --onefile --windowed --icon=icon.ico --name csv-dedup csv_dedup_gui.py
 
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v4
