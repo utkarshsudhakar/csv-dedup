@@ -1,32 +1,49 @@
-import pandas as pd
+""
 import tkinter as tk
-from tkinter import filedialog, messagebox, MULTIPLE, Listbox, Scrollbar, simpledialog
+from tkinter import ttk, filedialog, messagebox, MULTIPLE, Listbox, Scrollbar
+import pandas as pd
 import os
+from simple_salesforce import Salesforce, SalesforceLogin
 
 class CSVDeDuplicatorApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Akarshans Edge CSV De-Duplicator and Cleaner")
-        self.root.geometry("500x500")
+        self.root.title("Akarshans Edge Data Tool")
+        self.root.geometry("800x700")
         self.root.resizable(False, False)
 
         self.selected_file = None
         self.df = None
+        self.sf = None
+        self.sf_objects = []
+        self.selected_object = tk.StringVar()
         self.mobile_column_var = tk.StringVar()
         self.mobile_column_var.set("Select Mobile Column (Optional)")
 
         self.setup_widgets()
 
     def setup_widgets(self):
-        tk.Label(self.root, text="Step 1: Select a CSV File").pack(pady=10)
-        tk.Button(self.root, text="Browse CSV...", command=self.load_csv).pack()
+        notebook = ttk.Notebook(self.root)
+        self.dedup_frame = ttk.Frame(notebook)
+        self.salesforce_frame = ttk.Frame(notebook)
 
-        self.status_label = tk.Label(self.root, text="", fg="green")
+        notebook.add(self.dedup_frame, text="CSV De-Dup & Clean")
+        notebook.add(self.salesforce_frame, text="Salesforce Wizard")
+        notebook.pack(expand=True, fill='both')
+
+        self.setup_dedup_tab()
+        self.setup_salesforce_tab()
+
+    def setup_dedup_tab(self):
+        tk.Label(self.dedup_frame, text="Step 1: Select a CSV File").pack(pady=10)
+        tk.Button(self.dedup_frame, text="Browse CSV...", command=self.load_csv).pack()
+
+        self.status_label = tk.Label(self.dedup_frame, text="", fg="green")
         self.status_label.pack(pady=5)
 
-        tk.Label(self.root, text="Step 2: Select Column(s) to Deduplicate On").pack(pady=(15, 5))
+        tk.Label(self.dedup_frame, text="Step 2: Select Column(s) to Deduplicate On").pack(pady=(15, 5))
 
-        frame = tk.Frame(self.root)
+        frame = tk.Frame(self.dedup_frame)
         frame.pack()
 
         self.column_listbox = Listbox(frame, selectmode=MULTIPLE, width=50, height=8)
@@ -37,13 +54,13 @@ class CSVDeDuplicatorApp:
         scrollbar.pack(side=tk.RIGHT, fill="y")
         self.column_listbox.config(yscrollcommand=scrollbar.set)
 
-        tk.Label(self.root, text="Step 3: Select Mobile Number Column (Optional)").pack(pady=(10, 5))
-        self.mobile_dropdown = tk.OptionMenu(self.root, self.mobile_column_var, "")
+        tk.Label(self.dedup_frame, text="Step 3: Select Mobile Number Column (Optional)").pack(pady=(10, 5))
+        self.mobile_dropdown = tk.OptionMenu(self.dedup_frame, self.mobile_column_var, "")
         self.mobile_dropdown.pack()
 
-        tk.Button(self.root, text="Preview Duplicates", command=self.preview_duplicates).pack(pady=10)
-        tk.Button(self.root, text="CSV De-Dup", command=self.deduplicate_and_save, bg="#4CAF50", fg="white").pack(pady=5)
-        tk.Button(self.root, text="Filter Bad Data", command=self.filter_bad_data, bg="#f44336", fg="white").pack(pady=5)
+        tk.Button(self.dedup_frame, text="Preview Duplicates", command=self.preview_duplicates).pack(pady=10)
+        tk.Button(self.dedup_frame, text="Deduplicate and Save", command=self.deduplicate_and_save, bg="#4CAF50", fg="white").pack(pady=5)
+        tk.Button(self.dedup_frame, text="Filter Bad Data and Save", command=self.filter_bad_data, bg="#f39c12", fg="white").pack(pady=5)
 
     def load_csv(self):
         file_path = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
@@ -93,19 +110,15 @@ class CSVDeDuplicatorApp:
             messagebox.showwarning("No Columns", "Please select one or more columns.")
             return
 
-        filename = simpledialog.askstring("Save As", "Enter filename for DEDUPLICATED data (no extension):")
-        if not filename:
+        save_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV", "*.csv")], title="Save Deduplicated File")
+        if not save_path:
             return
-        output_path = os.path.join(os.path.dirname(self.selected_file), f"{filename}.csv")
 
         try:
-            df_deduped = self.df.drop_duplicates(subset=selected_columns)
-            if df_deduped.empty:
-                messagebox.showwarning("Empty Output", "All rows were removed. No valid data to save.")
-                return
-            df_deduped.to_csv(output_path, index=False)
-            self.df = df_deduped.copy()
-            messagebox.showinfo("Done", f"✅ Saved DEDUPLICATED file: {output_path}")
+            df_cleaned = self.df.drop_duplicates(subset=selected_columns)
+            df_cleaned.to_csv(save_path, index=False)
+            messagebox.showinfo("Saved", f"Saved deduplicated file: {save_path}")
+            self.df = df_cleaned.copy()
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save file:\n{e}")
 
@@ -116,59 +129,128 @@ class CSVDeDuplicatorApp:
 
         mobile_col = self.mobile_column_var.get()
         if mobile_col == "Select Mobile Column (Optional)":
-            messagebox.showwarning("No Mobile Column", "Please select a mobile number column for filtering bad data.")
-            return
-        if mobile_col not in self.df.columns:
-            messagebox.showerror("Error", f"Selected mobile column '{mobile_col}' not found in data.")
+            messagebox.showwarning("Column Missing", "Select a mobile number column.")
             return
 
-        def on_submit():
-            clean_name = clean_entry.get().strip()
-            bad_name = bad_entry.get().strip()
-            if not clean_name or not bad_name:
-                messagebox.showerror("Missing Input", "Please provide both filenames.")
-                return
-            popup.destroy()
-            clean_path = os.path.join(os.path.dirname(self.selected_file), f"{clean_name}.csv")
-            bad_path = os.path.join(os.path.dirname(self.selected_file), f"{bad_name}.csv")
+        clean_path = filedialog.asksaveasfilename(title="Save Clean Data As", defaultextension=".csv", filetypes=[("CSV", "*.csv")])
+        if not clean_path:
+            return
 
-            try:
-                is_bad = self.df[mobile_col].astype(str).str.len() > 14
-                is_bad |= ~self.df[mobile_col].astype(str).str.match(r'^\+?\d+$')
-                bad_data = self.df[is_bad].copy()
-                filtered_data = self.df[~is_bad]
+        bad_path = filedialog.asksaveasfilename(title="Save Bad Data As", defaultextension=".csv", filetypes=[("CSV", "*.csv")])
+        if not bad_path:
+            return
 
-                if filtered_data.empty:
-                    messagebox.showwarning("Empty Output", "All rows were filtered out. No valid data to save.")
-                    return
+        try:
+            is_bad = self.df[mobile_col].astype(str).str.len() > 14
+            is_bad = is_bad | ~self.df[mobile_col].astype(str).str.match(r'^\+?\d+$')
+            bad_data = self.df[is_bad].copy()
+            clean_data = self.df[~is_bad]
 
-                filtered_data.to_csv(clean_path, index=False)
-                messages = [f"✅ Saved CLEANED file: {clean_path}", f"🚫 {len(bad_data)} bad rows filtered."]
+            clean_data.to_csv(clean_path, index=False)
+            bad_data.to_csv(bad_path, index=False)
 
-                if not bad_data.empty:
-                    bad_data.to_csv(bad_path, index=False)
-                    messages.append(f"⚠️ Saved BAD DATA file: {bad_path} ({len(bad_data)} rows)")
+            messagebox.showinfo("Saved", f"Saved clean data to: {clean_path}\nSaved bad data to: {bad_path}")
+            self.df = clean_data.copy()
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
 
-                self.df = filtered_data.copy()
-                messagebox.showinfo("Done", "\n".join(messages))
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to filter data:\n{e}")
+    def setup_salesforce_tab(self):
+        frame = tk.Frame(self.salesforce_frame)
+        frame.pack(pady=10)
 
-        # Custom popup window for both filenames
-        popup = tk.Toplevel(self.root)
-        popup.title("Enter Output Filenames")
-        popup.geometry("350x180")
-        popup.grab_set()
+        tk.Label(frame, text="Salesforce Username").grid(row=0, column=0, sticky="e")
+        tk.Label(frame, text="Password").grid(row=1, column=0, sticky="e")
+        tk.Label(frame, text="Security Token").grid(row=2, column=0, sticky="e")
+        tk.Label(frame, text="Domain (login/sandbox)").grid(row=3, column=0, sticky="e")
 
-        tk.Label(popup, text="Cleaned Data Filename (no extension):").pack(pady=(10, 2))
-        clean_entry = tk.Entry(popup, width=30)
-        clean_entry.pack()
+        self.sf_user = tk.Entry(frame, width=40)
+        self.sf_pass = tk.Entry(frame, show='*', width=40)
+        self.sf_token = tk.Entry(frame, width=40)
+        self.sf_domain = tk.Entry(frame, width=40)
 
-        tk.Label(popup, text="Bad Data Filename (no extension):").pack(pady=(10, 2))
-        bad_entry = tk.Entry(popup, width=30)
-        bad_entry.pack()
+        self.sf_user.grid(row=0, column=1)
+        self.sf_pass.grid(row=1, column=1)
+        self.sf_token.grid(row=2, column=1)
+        self.sf_domain.grid(row=3, column=1)
 
-        tk.Button(popup, text="Submit", command=on_submit, bg="#4CAF50", fg="white").pack(pady=15)
+        tk.Button(frame, text="Login to Salesforce", command=self.login_salesforce, bg="#2980b9", fg="white").grid(row=4, columnspan=2, pady=10)
+        self.sf_status = tk.Label(frame, text="", fg="green")
+        self.sf_status.grid(row=5, columnspan=2)
+
+        self.sf_object_menu = ttk.Combobox(frame, textvariable=self.selected_object, state='readonly', width=37)
+        self.sf_object_menu.grid(row=6, column=1, pady=5)
+        tk.Label(frame, text="Select Object").grid(row=6, column=0, sticky="e")
+
+        tk.Button(frame, text="Export to CSV", command=self.export_salesforce_data, bg="#27ae60", fg="white").grid(row=7, columnspan=2, pady=5)
+        tk.Button(frame, text="Import from CSV", command=self.import_salesforce_data, bg="#c0392b", fg="white").grid(row=8, columnspan=2, pady=5)
+
+    def login_salesforce(self):
+        try:
+            username = self.sf_user.get()
+            password = self.sf_pass.get()
+            token = self.sf_token.get()
+            domain = self.sf_domain.get()
+
+            self.sf = Salesforce(username=username, password=password, security_token=token, domain=domain)
+            self.sf_objects = sorted(self.sf.describe()['sobjects'], key=lambda o: o['name'])
+            object_names = [obj['name'] for obj in self.sf_objects if obj['createable'] and obj['queryable']]
+            self.sf_object_menu['values'] = object_names
+            self.selected_object.set(object_names[0] if object_names else '')
+            self.sf_status.config(text="✅ Connected to Salesforce")
+        except Exception as e:
+            self.sf_status.config(text=f"❌ Failed: {e}", fg="red")
+
+    def export_salesforce_data(self):
+        if not self.sf:
+            messagebox.showwarning("Salesforce", "Please login first.")
+            return
+
+        object_name = self.selected_object.get()
+        if not object_name:
+            messagebox.showwarning("Select Object", "Please select a Salesforce object.")
+            return
+
+        try:
+            query_desc = self.sf.__getattr__(object_name).describe()
+            fields = [f['name'] for f in query_desc['fields']]
+            query = f"SELECT {', '.join(fields)} FROM {object_name}"
+            result = self.sf.query_all(query)
+            records = result['records']
+            for r in records:
+                r.pop('attributes', None)
+
+            df = pd.DataFrame(records)
+            file_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV", "*.csv")], title="Save Exported CSV")
+            if file_path:
+                df.to_csv(file_path, index=False)
+                messagebox.showinfo("Success", f"Exported data to {file_path}")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+
+    def import_salesforce_data(self):
+        if not self.sf:
+            messagebox.showwarning("Salesforce", "Please login first.")
+            return
+
+        object_name = self.selected_object.get()
+        if not object_name:
+            messagebox.showwarning("Select Object", "Please select a Salesforce object.")
+            return
+
+        file_path = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
+        if not file_path:
+            return
+
+        try:
+            df = pd.read_csv(file_path)
+            inserted = 0
+            for i, record in df.iterrows():
+                data = record.dropna().to_dict()
+                self.sf.__getattr__(object_name).create(data)
+                inserted += 1
+            messagebox.showinfo("Success", f"Inserted {inserted} records into {object_name}")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
 
 if __name__ == "__main__":
     root = tk.Tk()
