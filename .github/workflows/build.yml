@@ -34,7 +34,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dedup_tool_windows_exe
-          path: dist/csv_dedup_gui.exe
+          path: dist/csv-dedup.exe
 
   build-macos:
     name: Build .app for macOS
