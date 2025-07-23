@@ -122,37 +122,53 @@ class CSVDeDuplicatorApp:
             messagebox.showerror("Error", f"Selected mobile column '{mobile_col}' not found in data.")
             return
 
-        clean_name = simpledialog.askstring("Save As", "Enter filename for CLEANED data (no extension):")
-        if not clean_name:
-            return
-        bad_name = simpledialog.askstring("Save As", "Enter filename for BAD DATA (no extension):")
-        if not bad_name:
-            return
-
-        clean_path = os.path.join(os.path.dirname(self.selected_file), f"{clean_name}.csv")
-        bad_path = os.path.join(os.path.dirname(self.selected_file), f"{bad_name}.csv")
-
-        try:
-            is_bad = self.df[mobile_col].astype(str).str.len() > 14
-            is_bad |= ~self.df[mobile_col].astype(str).str.match(r'^\+?\d+$')
-            bad_data = self.df[is_bad].copy()
-            filtered_data = self.df[~is_bad]
-
-            if filtered_data.empty:
-                messagebox.showwarning("Empty Output", "All rows were filtered out. No valid data to save.")
+        def on_submit():
+            clean_name = clean_entry.get().strip()
+            bad_name = bad_entry.get().strip()
+            if not clean_name or not bad_name:
+                messagebox.showerror("Missing Input", "Please provide both filenames.")
                 return
+            popup.destroy()
+            clean_path = os.path.join(os.path.dirname(self.selected_file), f"{clean_name}.csv")
+            bad_path = os.path.join(os.path.dirname(self.selected_file), f"{bad_name}.csv")
 
-            filtered_data.to_csv(clean_path, index=False)
-            messages = [f"✅ Saved CLEANED file: {clean_path}", f"🚫 {len(bad_data)} bad rows filtered."]
+            try:
+                is_bad = self.df[mobile_col].astype(str).str.len() > 14
+                is_bad |= ~self.df[mobile_col].astype(str).str.match(r'^\+?\d+$')
+                bad_data = self.df[is_bad].copy()
+                filtered_data = self.df[~is_bad]
 
-            if not bad_data.empty:
-                bad_data.to_csv(bad_path, index=False)
-                messages.append(f"⚠️ Saved BAD DATA file: {bad_path} ({len(bad_data)} rows)")
+                if filtered_data.empty:
+                    messagebox.showwarning("Empty Output", "All rows were filtered out. No valid data to save.")
+                    return
 
-            self.df = filtered_data.copy()
-            messagebox.showinfo("Done", "\n".join(messages))
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to filter data:\n{e}")
+                filtered_data.to_csv(clean_path, index=False)
+                messages = [f"✅ Saved CLEANED file: {clean_path}", f"🚫 {len(bad_data)} bad rows filtered."]
+
+                if not bad_data.empty:
+                    bad_data.to_csv(bad_path, index=False)
+                    messages.append(f"⚠️ Saved BAD DATA file: {bad_path} ({len(bad_data)} rows)")
+
+                self.df = filtered_data.copy()
+                messagebox.showinfo("Done", "\n".join(messages))
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to filter data:\n{e}")
+
+        # Custom popup window for both filenames
+        popup = tk.Toplevel(self.root)
+        popup.title("Enter Output Filenames")
+        popup.geometry("350x180")
+        popup.grab_set()
+
+        tk.Label(popup, text="Cleaned Data Filename (no extension):").pack(pady=(10, 2))
+        clean_entry = tk.Entry(popup, width=30)
+        clean_entry.pack()
+
+        tk.Label(popup, text="Bad Data Filename (no extension):").pack(pady=(10, 2))
+        bad_entry = tk.Entry(popup, width=30)
+        bad_entry.pack()
+
+        tk.Button(popup, text="Submit", command=on_submit, bg="#4CAF50", fg="white").pack(pady=15)
 
 if __name__ == "__main__":
     root = tk.Tk()
